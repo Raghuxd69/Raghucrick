@@ -86,6 +86,7 @@ window.joinRoom = function () {
     if (snapshot.exists() && !snapshot.val().player2) {
       update(roomRef, { player2: serverTimestamp() }).then(() => {
         currentRoom = room;
+        isPlayer1 = false;
         document.getElementById('multiplayerOptions').style.display = 'none';
         document.getElementById('gameArea').style.display = 'block';
         document.getElementById('game').innerText = `Joined room ${room}. Waiting for the game to start...`;
@@ -168,14 +169,13 @@ function playTurnWithPlayer() {
         document.getElementById('game').innerText += `\nPlayer 1 scored ${player1Run}, total score: ${data.player1Score + player1Run}`;
       } else {
         update(roomRef, {
-          player2Score: data.player2Score + player2Run,
+          player2Score: data.player2Score + player1Run,
           player1Run: null,
           player2Run: null
         });
-        document.getElementById('game').innerText += `\nPlayer 2 scored ${player2Run}, total score: ${data.player2Score + player2Run}`;
-
-        if (data.player2Score + player2Run >= data.target) {
-          determineWinner(data);
+        document.getElementById('game').innerText += `\nPlayer 2 scored ${player1Run}, total score: ${data.player2Score + player1Run}`;
+        if (data.player2Score + player1Run >= data.target) {
+          document.getElementById('game').innerText += '\nPlayer 2 wins!';
         }
       }
     }
@@ -183,47 +183,26 @@ function playTurnWithPlayer() {
 }
 
 function playTurnWithComputer() {
+  const playerRun = runInput;
   const computerRun = Math.floor(Math.random() * 6) + 1;
-  document.getElementById('game').innerText += `\nYou chose ${runInput}, computer chose ${computerRun}`;
-
-  if (runInput === computerRun) {
-    if (!isSecondInnings) {
-      document.getElementById('game').innerText += '\nOut! Your innings is over.';
-      isSecondInnings = true;
-      runInput = null;
-    } else {
-      document.getElementById('game').innerText += '\nOut! Computer\'s innings is over.';
-      determineWinner();
-    }
+  
+  if (playerRun === computerRun) {
+    document.getElementById('game').innerText += '\nOut! You are out!';
   } else {
-    if (!isSecondInnings) {
-      document.getElementById('game').innerText += `\nYou scored ${runInput}`;
-    } else {
-      document.getElementById('game').innerText += `\nComputer scored ${computerRun}`;
-
-      if (computerRun >= runInput) {
-        determineWinner();
-      }
-    }
+    document.getElementById('game').innerText += `\nYou scored ${playerRun}, Computer scored ${computerRun}`;
   }
 }
 
 function determineWinner(data) {
-  let winner;
-  if (isComputer) {
-    winner = data.player2Score > data.target ? 'Computer wins!' : 'You win!';
+  if (data.player1Score > data.player2Score) {
+    document.getElementById('game').innerText += '\nPlayer 1 wins!';
+  } else if (data.player2Score > data.player1Score) {
+    document.getElementById('game').innerText += '\nPlayer 2 wins!';
   } else {
-    if (data.player1Score > data.player2Score) {
-      winner = 'Player 1 wins!';
-    } else if (data.player1Score < data.player2Score) {
-      winner = 'Player 2 wins!';
-    } else {
-      winner = 'It\'s a tie!';
-    }
+    document.getElementById('game').innerText += '\nIt\'s a tie!';
   }
-  document.getElementById('game').innerText += `\n${winner}`;
 }
 
 function generateRoomCode() {
-  return Math.random().toString(36).substring(2, 8).toUpperCase();
+  return Math.floor(100000 + Math.random() * 900000).toString();
 }
