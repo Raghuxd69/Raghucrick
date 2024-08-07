@@ -18,19 +18,13 @@ const app = initializeApp(firebaseConfig);
 const auth = getAuth();
 const database = getDatabase(app);
 
-// Sign in anonymously
 signInAnonymously(auth)
-  .then(() => {
-    console.log('Signed in anonymously');
-  })
-  .catch((error) => {
-    console.error(`Error signing in: ${error.code}, ${error.message}`);
-  });
+  .then(() => console.log('Signed in anonymously'))
+  .catch((error) => console.error(`Error signing in: ${error.code}, ${error.message}`));
 
 onAuthStateChanged(auth, (user) => {
   if (user) {
-    const uid = user.uid;
-    console.log(`User ID: ${uid}`);
+    console.log(`User ID: ${user.uid}`);
   } else {
     console.log('User is signed out');
   }
@@ -38,9 +32,8 @@ onAuthStateChanged(auth, (user) => {
 
 let currentRoom = null;
 let isPlayer1 = false;
-let isSecondInnings = false;
 let isComputer = false;
-let runInput = null;
+let playerName = '';
 let timer = null;
 
 window.startMultiplayer = function () {
@@ -62,10 +55,11 @@ window.createRoom = function () {
   const roomRef = ref(database, `rooms/${room}`);
 
   set(roomRef, {
-    player1: serverTimestamp(),
+    player1: {
+      name: playerName,
+      score: 0
+    },
     player2: null,
-    player1Score: 0,
-    player2Score: 0,
     target: null,
     player1Run: null,
     player2Run: null
@@ -75,6 +69,7 @@ window.createRoom = function () {
     document.getElementById('multiplayerOptions').style.display = 'none';
     document.getElementById('gameArea').style.display = 'block';
     document.getElementById('game').innerText = `Room ${room} created. Waiting for another player...`;
+    displayWaitingForOtherPlayer();
   });
 }
 
@@ -84,12 +79,18 @@ window.joinRoom = function () {
 
   get(roomRef).then(snapshot => {
     if (snapshot.exists() && !snapshot.val().player2) {
-      update(roomRef, { player2: serverTimestamp() }).then(() => {
+      update(roomRef, {
+        player2: {
+          name: playerName,
+          score: 0
+        }
+      }).then(() => {
         currentRoom = room;
         isPlayer1 = false;
         document.getElementById('multiplayerOptions').style.display = 'none';
         document.getElementById('gameArea').style.display = 'block';
         document.getElementById('game').innerText = `Joined room ${room}. Waiting for the game to start...`;
+        displayWaitingForOtherPlayer();
       });
     } else {
       document.getElementById('game').innerText = `Room ${room} is not available or already has two players.`;
@@ -97,23 +98,33 @@ window.joinRoom = function () {
   });
 }
 
-window.submitRun = function () {
-  const run = parseInt(document.getElementById('runInput').value);
+window.submitName = function () {
+  playerName = document.getElementById('nameInput').value;
+  if (playerName.trim() === '') {
+    alert('Please enter your name.');
+    return;
+  }
+  document.getElementById('nameInput').style.display = 'none';
+  document.getElementById('runButtons').style.display = 'block';
+}
+
+window.submitRun = function (run) {
   if (run < 1 || run > 6) {
     alert('Enter a valid run between 1 and 6');
     return;
   }
-  runInput = run;
-  if (!isComputer) {
-    const roomRef = ref(database, `rooms/${currentRoom}`);
+
+  const roomRef = ref(database, `rooms/${currentRoom}`);
+  if (isComputer) {
+    playTurnWithComputer(run);
+  } else {
     if (isPlayer1) {
       update(roomRef, { player1Run: run });
     } else {
       update(roomRef, { player2Run: run });
     }
-  } else {
-    playTurnWithComputer();
   }
+
   startTimer();
 }
 
@@ -128,18 +139,12 @@ function startTimer() {
     if (timeLeft <= 0) {
       clearInterval(timer);
       document.getElementById('timer').style.display = 'none';
-      if (runInput !== null) {
-        if (!isComputer) {
-          playTurnWithPlayer();
-        } else {
-          playTurnWithComputer();
-        }
-      }
+      processTurns();
     }
   }, 1000);
 }
 
-function playTurnWithPlayer() {
+function processTurns() {
   const roomRef = ref(database, `rooms/${currentRoom}`);
   get(roomRef).then(snapshot => {
     const data = snapshot.val();
@@ -147,62 +152,59 @@ function playTurnWithPlayer() {
     const player2Run = data.player2Run;
 
     if (player1Run === player2Run) {
-      if (!isSecondInnings) {
-        document.getElementById('game').innerText += '\nOut! Player 1\'s innings over.';
-        update(roomRef, {
-          player1Run: null,
-          player2Run: null,
-          target: data.player1Score + 1
-        });
-        isSecondInnings = true;
+      if (isPlayer1) {
+        document.getElementById('game').innerText += '\nYou are out!';
+        update(roomRef, { player1Run: null, player2Run: null });
       } else {
-        document.getElementById('game').innerText += '\nOut! Player 2\'s innings over.';
-        determineWinner(data);
+        document.getElementById('game').innerText += '\nYou are out!';
+        update(roomRef, { player1Run: null, player2Run: null });
       }
     } else {
-      if (!isSecondInnings) {
+      if (isPlayer1) {
         update(roomRef, {
-          player1Score: data.player1Score + player1Run,
+          player1Score: data.player1.score + player1Run,
           player1Run: null,
           player2Run: null
         });
-        document.getElementById('game').innerText += `\nPlayer 1 scored ${player1Run}, total score: ${data.player1Score + player1Run}`;
+        document.getElementById('game').innerText += `\nYou scored ${player1Run}. Total score: ${data.player1.score + player1Run}`;
       } else {
         update(roomRef, {
-          player2Score: data.player2Score + player1Run,
+          player2Score: data.player2.score + player1Run,
           player1Run: null,
           player2Run: null
         });
-        document.getElementById('game').innerText += `\nPlayer 2 scored ${player1Run}, total score: ${data.player2Score + player1Run}`;
-        if (data.player2Score + player1Run >= data.target) {
-          document.getElementById('game').innerText += '\nPlayer 2 wins!';
-        }
+        document.getElementById('game').innerText += `\nYou scored ${player1Run}. Total score: ${data.player2.score + player1Run}`;
       }
     }
   });
 }
 
-function playTurnWithComputer() {
-  const playerRun = runInput;
-  const computerRun = Math.floor(Math.random() * 6) + 1;
-  
-  if (playerRun === computerRun) {
-    document.getElementById('game').innerText += '\nOut! You are out!';
-  } else {
-    document.getElementById('game').innerText += `\nYou scored ${playerRun}, Computer scored ${computerRun}`;
-  }
-}
-
-function determineWinner(data) {
-  if (data.player1Score > data.player2Score) {
-    document.getElementById('game').innerText += '\nPlayer 1 wins!';
-  } else if (data.player2Score > data.player1Score) {
-    document.getElementById('game').innerText += '\nPlayer 2 wins!';
-  } else {
-    document.getElementById('game').innerText += '\nIt\'s a tie!';
-  }
+function displayWaitingForOtherPlayer() {
+  const roomRef = ref(database, `rooms/${currentRoom}`);
+  onValue(roomRef, (snapshot) => {
+    const data = snapshot.val();
+    if (data.player2) {
+      document.getElementById('game').innerText = `Player ${data.player2.name} has joined the room.`;
+      setTimeout(() => {
+        document.getElementById('game').innerText = `Game starting in 3 seconds...`;
+        startTimer();
+      }, 3000);
+    }
+  });
 }
 
 function generateRoomCode() {
   return Math.floor(100000 + Math.random() * 900000).toString();
+}
+
+function playTurnWithComputer(run) {
+  // Simulate computer's turn
+  const computerRun = Math.floor(Math.random() * 6) + 1;
+  document.getElementById('game').innerText += `\nYou chose ${run}. Computer chose ${computerRun}.`;
+  
+  if (run === computerRun) {
+    document.getElementById('game').innerText += '\nYou are out!';
+  } else {
+    document.getElementById('game').innerText += `\nYou scored ${run}.`;
+  }
 }
