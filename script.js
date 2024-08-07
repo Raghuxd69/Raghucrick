@@ -1,6 +1,6 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.5/firebase-app.js";
 import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.12.5/firebase-auth.js";
-import { getDatabase, ref, set, update, onValue, serverTimestamp, get } from "https://www.gstatic.com/firebasejs/10.12.5/firebase-database.js";
+import { getDatabase, ref, set, update, onValue, get } from "https://www.gstatic.com/firebasejs/10.12.5/firebase-database.js";
 
 const firebaseConfig = {
   apiKey: "AIzaSyBjpFuQ0Mg9KnthmToMXMw_c0tXIBY2rKo",
@@ -48,6 +48,7 @@ window.startComputer = function () {
   document.getElementById('container').style.display = 'none';
   document.getElementById('gameArea').style.display = 'block';
   document.getElementById('game').innerText = 'Playing against the computer. You bat first.';
+  document.getElementById('runButtons').style.display = 'block';
 }
 
 window.createRoom = function () {
@@ -105,7 +106,6 @@ window.submitName = function () {
     return;
   }
   document.getElementById('nameInput').style.display = 'none';
-  document.getElementById('runButtons').style.display = 'block';
 }
 
 window.submitRun = function (run) {
@@ -154,57 +154,48 @@ function processTurns() {
     if (player1Run === player2Run) {
       if (isPlayer1) {
         document.getElementById('game').innerText += '\nYou are out!';
-        update(roomRef, { player1Run: null, player2Run: null });
+        update(roomRef, { player1Run: null });
       } else {
         document.getElementById('game').innerText += '\nYou are out!';
-        update(roomRef, { player1Run: null, player2Run: null });
+        update(roomRef, { player2Run: null });
       }
     } else {
       if (isPlayer1) {
-        update(roomRef, {
-          player1Score: data.player1.score + player1Run,
-          player1Run: null,
-          player2Run: null
-        });
-        document.getElementById('game').innerText += `\nYou scored ${player1Run}. Total score: ${data.player1.score + player1Run}`;
+        update(roomRef, { player1Run: null, target: (data.target || 0) + player1Run });
+        document.getElementById('game').innerText += `\nYou scored ${player1Run} run(s).`;
       } else {
-        update(roomRef, {
-          player2Score: data.player2.score + player1Run,
-          player1Run: null,
-          player2Run: null
-        });
-        document.getElementById('game').innerText += `\nYou scored ${player1Run}. Total score: ${data.player2.score + player1Run}`;
+        update(roomRef, { player2Run: null, target: (data.target || 0) + player2Run });
+        document.getElementById('game').innerText += `\nYou scored ${player2Run} run(s).`;
       }
+    }
+
+    if (isComputer) {
+      playTurnWithComputer(player1Run);
     }
   });
 }
 
-function displayWaitingForOtherPlayer() {
-  const roomRef = ref(database, `rooms/${currentRoom}`);
-  onValue(roomRef, (snapshot) => {
-    const data = snapshot.val();
-    if (data.player2) {
-      document.getElementById('game').innerText = `Player ${data.player2.name} has joined the room.`;
-      setTimeout(() => {
-        document.getElementById('game').innerText = `Game starting in 3 seconds...`;
-        startTimer();
-      }, 3000);
-    }
-  });
+function playTurnWithComputer(playerRun) {
+  const computerRun = Math.floor(Math.random() * 6) + 1;
+  document.getElementById('game').innerText = `You: ${playerRun} - Computer: ${computerRun}`;
+  if (playerRun === computerRun) {
+    document.getElementById('game').innerText += '\nYou are out!';
+  } else {
+    document.getElementById('game').innerText += `\nYou scored ${playerRun} run(s).`;
+  }
 }
 
 function generateRoomCode() {
   return Math.floor(100000 + Math.random() * 900000).toString();
 }
 
-function playTurnWithComputer(run) {
-  // Simulate computer's turn
-  const computerRun = Math.floor(Math.random() * 6) + 1;
-  document.getElementById('game').innerText += `\nYou chose ${run}. Computer chose ${computerRun}.`;
-  
-  if (run === computerRun) {
-    document.getElementById('game').innerText += '\nYou are out!';
-  } else {
-    document.getElementById('game').innerText += `\nYou scored ${run}.`;
-  }
+function displayWaitingForOtherPlayer() {
+  const roomRef = ref(database, `rooms/${currentRoom}`);
+  onValue(roomRef, (snapshot) => {
+    const data = snapshot.val();
+    if (data.player1 && data.player2) {
+      document.getElementById('game').innerText = `Player 2 joined: ${data.player2.name}. Game starting...`;
+      document.getElementById('runButtons').style.display = 'block';
+    }
+  });
 }
