@@ -35,6 +35,8 @@ let isPlayer1 = false;
 let isComputer = false;
 let playerName = '';
 let timer = null;
+let player1Score = 0;
+let player2Score = 0;
 
 window.startMultiplayer = function () {
   document.getElementById('container').style.display = 'none';
@@ -49,6 +51,7 @@ window.startComputer = function () {
   document.getElementById('gameArea').style.display = 'block';
   document.getElementById('game').innerText = 'Playing against the computer. You bat first.';
   document.getElementById('runButtons').style.display = 'block';
+  updateScores();
 }
 
 window.createRoom = function () {
@@ -155,20 +158,24 @@ function processTurns() {
       if (isPlayer1) {
         document.getElementById('game').innerText += '\nYou are out!';
         update(roomRef, { player1Run: null });
+        player1Score = 0;
       } else {
         document.getElementById('game').innerText += '\nYou are out!';
         update(roomRef, { player2Run: null });
+        player2Score = 0;
       }
     } else {
       if (isPlayer1) {
+        player1Score += player1Run;
         update(roomRef, { player1Run: null, target: (data.target || 0) + player1Run });
         document.getElementById('game').innerText += `\nYou scored ${player1Run} run(s).`;
       } else {
+        player2Score += player2Run;
         update(roomRef, { player2Run: null, target: (data.target || 0) + player2Run });
         document.getElementById('game').innerText += `\nYou scored ${player2Run} run(s).`;
       }
     }
-
+    updateScores();
     if (isComputer) {
       playTurnWithComputer(player1Run);
     }
@@ -181,8 +188,15 @@ function playTurnWithComputer(playerRun) {
   if (playerRun === computerRun) {
     document.getElementById('game').innerText += '\nYou are out!';
   } else {
+    player1Score += playerRun;
+    updateScores();
     document.getElementById('game').innerText += `\nYou scored ${playerRun} run(s).`;
+    startTimer();
   }
+}
+
+function updateScores() {
+  document.getElementById('scores').innerText = `Player 1: ${player1Score} - Player 2: ${player2Score}`;
 }
 
 function generateRoomCode() {
@@ -198,4 +212,11 @@ function displayWaitingForOtherPlayer() {
       document.getElementById('runButtons').style.display = 'block';
     }
   });
+}
+
+window.goBack = function (page) {
+  document.getElementById('container').style.display = 'none';
+  document.getElementById('multiplayerOptions').style.display = 'none';
+  document.getElementById('gameArea').style.display = 'none';
+  document.getElementById(page).style.display = 'block';
 }
